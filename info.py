@@ -29,11 +29,11 @@ USE_CAPTION_FILTER = bool(environ.get('USE_CAPTION_FILTER', True))
 BOT_START_TIME = time()
 
 # Bot images & videos
-PICS = (environ.get('PICS', '')).split()
+PICS = (environ.get('PICS', ''https://ibb.co/Z1xNkYQm)).split()
 REQ_PICS = (environ.get('REQ_PICS', '')).split()
-NOR_IMG = environ.get("NOR_IMG", "")
-MELCOW_VID = environ.get("MELCOW_VID", "")
-SPELL_IMG = environ.get("SPELL_IMG", "")
+NOR_IMG = environ.get("NOR_IMG", "https://ibb.co/r2GBv87W")
+MELCOW_VID = environ.get("MELCOW_VID", "https://ibb.co/r2GBv87W")
+SPELL_IMG = environ.get("SPELL_IMG", "https://ibb.co/C3PpG8gX")
 
 # Admins, Channels & Users
 ADMINS = [int(admin) if id_pattern.search(admin) else admin for admin in environ.get('ADMINS', '').split()]
