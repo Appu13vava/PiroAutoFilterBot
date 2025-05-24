@@ -31,7 +31,7 @@ BOT_START_TIME = time()
 # Bot images & videos
 PICS = (environ.get('PICS', 'https://ibb.co/Z1xNkYQm')).split()
 REQ_PICS = (environ.get('REQ_PICS', 'https://ibb.co/hFgTr8r1')).split()
-NOR_IMG = environ.get("NOR_IMG", "https://ibb.co/hFgTr8r1")
+NOR_IMG = environ.get("NOR_IMG", "https://ibb.co/mC8x7G99")
 MELCOW_VID = environ.get("MELCOW_VID", "https://graph.org/file/72dff2b65352ba85d0a34.mp4")
 SPELL_IMG = environ.get("SPELL_IMG", "https://telegra.ph/file/2a888a370f479f4338f7c.jpg")
 
