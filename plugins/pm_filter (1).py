@@ -1469,7 +1469,25 @@ async def auto_filter(client, msg, spoll=False):
                     await fek.delete()
                     await message.delete()
     else:
-        fuk = await message.reply_photo(photo=NOR_IMG, caption=cap, reply_markup=InlineKeyboardMarkup(btn))
+        try:
+    fek = await message.reply_photo(
+        photo=NOR_IMG,
+        caption=cap,
+        reply_markup=InlineKeyboardMarkup(btn)
+    )
+        logger.exception(f"Failed to send photo reply: {e}")
+    # Fallback to text reply if photo fails
+    fek = await message.reply(
+        cap,
+        reply_markup=InlineKeyboardMarkup(btn)
+    )
+except Exception as e:
+    logger.exception(f"Failed to send photo reply: {e}")
+    # Fallback to text reply if photo fails
+    fek = await message.reply(
+        cap,
+        reply_markup=InlineKeyboardMarkup(btn)
+    )
         try:
             if settings['auto_delete']:
                 await asyncio.sleep(600)
