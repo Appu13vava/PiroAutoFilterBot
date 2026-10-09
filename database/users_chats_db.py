@@ -15,7 +15,14 @@ class Database:
         self.db = self._client[database_name]
         self.col = self.db.users
         self.grp = self.db.groups
+
+        # Force join requests
         self.force_requests = self.db.force_requests
+
+        # Pending files awaiting a join request
+        self.pending_force_files = self.db.pending_force_files
+
+    # ---------------- FORCE JOIN REQUESTS ----------------
 
     async def add_force_request(self, user_id, channel_id):
         await self.force_requests.update_one(
@@ -32,20 +39,56 @@ class Database:
             upsert=True
         )
 
-    async def has_force_request(self, user_id, channel_id=None):
-        """Check whether a user has a saved pending request, optionally for one channel."""
-        query = {"user_id": int(user_id)}
-        if channel_id is not None:
-            query["channel_id"] = int(channel_id)
-        return await self.force_requests.find_one(query) is not None
+    async def has_force_request(self, user_id):
+        return await self.force_requests.find_one(
+            {"user_id": int(user_id)}
+        ) is not None
+
+    async def has_force_request_for_channel(self, user_id, channel_id):
+        return await self.force_requests.find_one({
+            "user_id": int(user_id),
+            "channel_id": int(channel_id)
+        }) is not None
 
     async def remove_force_request(self, user_id, channel_id):
-        await self.force_requests.delete_one(
+        await self.force_requests.delete_one({
+            "user_id": int(user_id),
+            "channel_id": int(channel_id)
+        })
+
+    # ---------------- PENDING FILES ----------------
+
+    async def save_pending_force_file(
+        self, user_id, channel_id, file_id, protect=False
+    ):
+        await self.pending_force_files.update_one(
             {
                 "user_id": int(user_id),
                 "channel_id": int(channel_id)
-            }
+            },
+            {
+                "$set": {
+                    "user_id": int(user_id),
+                    "channel_id": int(channel_id),
+                    "file_id": file_id,
+                    "protect": bool(protect)
+                }
+            },
+            upsert=True
         )
+
+    async def get_pending_force_file(self, user_id, channel_id):
+        return await self.pending_force_files.find_one({
+            "user_id": int(user_id),
+            "channel_id": int(channel_id)
+        })
+
+    async def remove_pending_force_file(self, user_id):
+        await self.pending_force_files.delete_many({
+            "user_id": int(user_id)
+        })
+
+    # ---------------- USERS ----------------
 
     def new_user(self, id, name):
         return dict(
@@ -53,18 +96,8 @@ class Database:
             name=name,
             ban_status=dict(
                 is_banned=False,
-                ban_reason="",
-            ),
-        )
-
-    def new_group(self, id, title):
-        return dict(
-            id=id,
-            title=title,
-            chat_status=dict(
-                is_disabled=False,
-                reason="",
-            ),
+                ban_reason=""
+            )
         )
 
     async def add_user(self, id, name):
@@ -121,9 +154,21 @@ class Database:
         b_users = [user["id"] async for user in users]
         return b_users, b_chats
 
+    # ---------------- GROUPS ----------------
+
+    def new_group(self, id, title):
+        return dict(
+            id=id,
+            title=title,
+            chat_status=dict(
+                is_disabled=False,
+                reason=""
+            )
+        )
+
     async def add_chat(self, chat, title):
-        chat = self.new_group(chat, title)
-        await self.grp.insert_one(chat)
+        group = self.new_group(chat, title)
+        await self.grp.insert_one(group)
 
     async def get_chat(self, chat):
         chat = await self.grp.find_one({"id": int(chat)})
@@ -178,6 +223,8 @@ class Database:
 
     async def get_all_chats(self):
         return self.grp.find({})
+
+    # ---------------- DATABASE ----------------
 
     async def get_db_size(self):
         return (await self.db.command("dbstats"))["dataSize"]
