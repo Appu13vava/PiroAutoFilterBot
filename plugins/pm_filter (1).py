@@ -116,21 +116,28 @@ async def next_page(bot, query):
             for file in files
         ]
     try:
-        if settings['auto_delete']:
-            btn.insert(0, 
-            [
-                InlineKeyboardButton(f'😇 Info', 'tips'),
-                InlineKeyboardButton(f'📝 𝖳𝗂𝗉𝗌', 'info')
-            ]
+    if settings['auto_delete']:
+        btn.insert(0, [
+            InlineKeyboardButton(
+                text='😇 Info',
+                callback_data='tips'
+            ),
+            InlineKeyboardButton(
+                text='📝 𝖳𝗂𝗉𝗌',
+                callback_data='info'
             )
-
-        else:
-            btn.insert(0, 
-            [
-                InlineKeyboardButton(f'😇 Info', 'tips'),
-                InlineKeyboardButton(f'📝 𝖳𝗂𝗉𝗌', 'info')
-            ]
+        ])
+    else:
+        btn.insert(0, [
+            InlineKeyboardButton(
+                text='😇 Info',
+                callback_data='tips'
+            ),
+            InlineKeyboardButton(
+                text='📝 𝖳𝗂𝗉𝗌',
+                callback_data='info'
             )
+        ])
                 
     except KeyError:
         grpid = await active_connection(str(query.message.from_user.id))
