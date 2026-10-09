@@ -77,6 +77,17 @@ class Database:
             upsert=True
         )
 
+    async def save_pending_force_search(self, user_id, channel_id, search_query):
+        await self.pending_force_files.update_one(
+            {"user_id": int(user_id), "channel_id": int(channel_id)},
+            {"$set": {
+                "user_id": int(user_id),
+                "channel_id": int(channel_id),
+                "search_query": str(search_query),
+            }, "$unset": {"file_id": "", "protect": ""}},
+            upsert=True
+        )
+
     async def get_pending_force_file(self, user_id, channel_id):
         return await self.pending_force_files.find_one({
             "user_id": int(user_id),
