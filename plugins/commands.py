@@ -12,6 +12,7 @@ from database.users_chats_db import db
 from info import CHANNELS, ADMINS, AUTH_CHANNEL, AUTH_CHANNELS, LOG_CHANNEL, PICS, BATCH_FILE_CAPTION, CUSTOM_FILE_CAPTION, SUPPORT_CHAT, PROTECT_CONTENT, REQST_CHANNEL, SUPPORT_CHAT_ID, MAX_B_TN
 from utils import get_settings, get_size, is_subscribed, get_missing_force_channels, save_group_settings, temp
 from database.connections_mdb import active_connection
+from search_link import send_search_results
 import re
 import json
 import base64
@@ -90,11 +91,17 @@ async def start(client, message):
             pending_file_id = None
             pending_protect = False
             try:
-                kk, pending_file_id = message.command[1].split("_", 1)
-                pending_protect = kk == "filep"
-                await db.save_pending_force_file(
-                    message.from_user.id, channel_id, pending_file_id, pending_protect
-                )
+                kk, payload = message.command[1].split("_", 1)
+                if kk == "search":
+                    await db.save_pending_force_search(
+                        message.from_user.id, channel_id, payload
+                    )
+                else:
+                    pending_file_id = payload
+                    pending_protect = kk == "filep"
+                    await db.save_pending_force_file(
+                        message.from_user.id, channel_id, pending_file_id, pending_protect
+                    )
             except (IndexError, ValueError):
                 pass
             invite_link = await client.create_chat_invite_link(
@@ -150,6 +157,9 @@ async def start(client, message):
         )
         return
     data = message.command[1]
+    if data.startswith("search_"):
+        await send_search_results(client, message.from_user.id, data[len("search_"):])
+        return
     try:
         pre, file_id = data.split('_', 1)
     except:
