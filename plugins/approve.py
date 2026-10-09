@@ -5,6 +5,7 @@ from info import AUTH_CHANNELS, CUSTOM_FILE_CAPTION
 from database.users_chats_db import db
 from database.ia_filterdb import get_file_details
 from utils import get_size
+from search_link import send_search_results
 
 logger = logging.getLogger(__name__)
 logger.info("Force join-request plugin loaded")
@@ -34,13 +35,22 @@ async def save_join_request(client, request):
 
         if not pending:
             logger.info(
-                "No pending file for user=%s channel=%s",
+                "No pending file/search for user=%s channel=%s",
                 user_id,
                 channel_id
             )
             return
 
-        file_id = pending["file_id"]
+        if pending.get("search_query"):
+            await send_search_results(client, user_id, pending["search_query"])
+            await db.remove_pending_force_file(user_id)
+            logger.info("Pending search results sent: user=%s query=%s", user_id, pending["search_query"])
+            return
+
+        file_id = pending.get("file_id")
+        if not file_id:
+            await db.remove_pending_force_file(user_id)
+            return
         details = await get_file_details(file_id)
 
         if not details:
