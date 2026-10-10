@@ -1175,63 +1175,89 @@ async def cb_handler(client: Client, query: CallbackQuery):
             )
 
     elif query.data.startswith("setgs"):
-        # Settings callbacks may be opened from a group or from the admin's PM.
-        # Always normalize the group ID and do not require an active PM connection
-        # when the settings button was clicked directly in the group.
-        try:
-            _, set_type, status, grp_id_raw = query.data.split("#", 3)
-            grp_id = int(grp_id_raw)
-        except (ValueError, TypeError):
-            return await query.answer("Invalid settings button. Please run /settings again.", show_alert=True)
+        ident, set_type, status, grp_id = query.data.split("#")
+        grp_id = int(grp_id)
+        userid = query.from_user.id
 
-        user_id = query.from_user.id if query.from_user else None
-        if not user_id:
-            return await query.answer("Could not identify your account.", show_alert=True)
-
-        # Bot owners/admins can manage settings. Otherwise the user must be a
-        # group administrator/owner of the target group.
-        allowed = str(user_id) in [str(admin_id) for admin_id in ADMINS]
-        if not allowed:
+        # Settings can be changed either from the target group or from PM
+        # while the user is actively connected to that group.
+        if query.message.chat.type == enums.ChatType.PRIVATE:
+            active_group = await active_connection(str(userid))
+            if active_group is None or int(active_group) != grp_id:
+                return await query.answer(
+                    "Connect to this group again using /settings.", show_alert=True
+                )
+        else:
+            if int(query.message.chat.id) != grp_id:
+                return await query.answer("This settings menu belongs to another group.", show_alert=True)
             try:
-                member = await client.get_chat_member(grp_id, user_id)
-                allowed = member.status in (enums.ChatMemberStatus.ADMINISTRATOR, enums.ChatMemberStatus.OWNER)
+                member = await client.get_chat_member(grp_id, userid)
+                if member.status not in (enums.ChatMemberStatus.OWNER, enums.ChatMemberStatus.ADMINISTRATOR) and str(userid) not in ADMINS:
+                    return await query.answer("Only group admins can change settings.", show_alert=True)
             except Exception:
-                allowed = False
-        if not allowed:
-            return await query.answer("You must be a group admin to change these settings.", show_alert=True)
+                if str(userid) not in ADMINS:
+                    return await query.answer("Could not verify admin permission.", show_alert=True)
 
-        current = await get_settings(grp_id)
-        if current is None or set_type not in current:
-            return await query.answer("This setting is unavailable. Please run /settings again.", show_alert=True)
-
-        # Toggle the selected setting and persist it using the numeric group ID.
-        new_value = status != "True"
-        try:
-            await save_group_settings(grp_id, set_type, new_value)
-            settings = await get_settings(grp_id)
-        except Exception as exc:
-            logger.exception("Failed to update group setting %s for %s", set_type, grp_id)
-            return await query.answer("Could not save this setting. Please try again.", show_alert=True)
+        # Use the callback's displayed value to toggle the selected setting.
+        await save_group_settings(grp_id, set_type, status != "True")
+        settings = await get_settings(grp_id)
 
         if settings is not None:
             buttons = [
-                [InlineKeyboardButton('𝖥𝗂𝗅𝗍𝖾𝗋 𝖡𝗎𝗍𝗍𝗈𝗇', callback_data=f'setgs#button#{settings["button"]}#{grp_id}'), InlineKeyboardButton('𝖲𝗂𝗇𝗀𝗅𝖾 𝖡𝗎𝗍𝗍𝗈𝗇' if settings["button"] else '𝖣𝗈𝗎𝖻𝗅𝖾', callback_data=f'setgs#button#{settings["button"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖥𝗂𝗅𝖾 𝖲𝖾𝗇𝖽 𝖬𝗈𝖽𝖾', callback_data=f'setgs#botpm#{settings["botpm"]}#{grp_id}'), InlineKeyboardButton('𝖬𝖺𝗇𝗎𝖺𝗅 𝖲𝗍𝖺𝗋𝗍' if settings["botpm"] else '𝖠𝗎𝗍𝗈 𝖲𝖾𝗇𝖽', callback_data=f'setgs#botpm#{settings["botpm"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖯𝗋𝗈𝗍𝖾𝖼𝗍 𝖢𝗈𝗇𝗍𝖾𝗇𝗍', callback_data=f'setgs#file_secure#{settings["file_secure"]}#{grp_id}'), InlineKeyboardButton('✅ 𝖮𝗇' if settings["file_secure"] else '❌ 𝖮𝖿𝖿', callback_data=f'setgs#file_secure#{settings["file_secure"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖨𝖬𝖣𝖻', callback_data=f'setgs#imdb#{settings["imdb"]}#{grp_id}'), InlineKeyboardButton('✅ 𝖮𝗇' if settings["imdb"] else '❌ 𝖮𝖿𝖿', callback_data=f'setgs#imdb#{settings["imdb"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖲𝗉𝖾𝗅𝗅 𝖢𝗁𝖾𝖼𝗄', callback_data=f'setgs#spell_check#{settings["spell_check"]}#{grp_id}'), InlineKeyboardButton('✅ 𝖮𝗇' if settings["spell_check"] else '❌ 𝖮𝖿𝖿', callback_data=f'setgs#spell_check#{settings["spell_check"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖬𝖾𝗌𝗌𝖺𝗀𝖾', callback_data=f'setgs#welcome#{settings["welcome"]}#{grp_id}'), InlineKeyboardButton('✅ 𝖮𝗇' if settings["welcome"] else '❌ 𝖮𝖿𝖿', callback_data=f'setgs#welcome#{settings["welcome"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖠𝗎𝗍𝗈 𝖣𝖾𝗅𝖾𝗍𝖾', callback_data=f'setgs#auto_delete#{settings["auto_delete"]}#{grp_id}'), InlineKeyboardButton('5 𝖬𝗂𝗇' if settings["auto_delete"] else '❌ 𝖮𝖿𝖿', callback_data=f'setgs#auto_delete#{settings["auto_delete"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖠𝗎𝗍𝗈-𝖥𝗂𝗅𝗍𝖾𝗋', callback_data=f'setgs#auto_ffilter#{settings["auto_ffilter"]}#{grp_id}'), InlineKeyboardButton('✅ 𝖮𝗇' if settings["auto_ffilter"] else '❌ 𝖮𝖿𝖿', callback_data=f'setgs#auto_ffilter#{settings["auto_ffilter"]}#{grp_id}')],
-                [InlineKeyboardButton('𝖬𝖺𝗑 𝖡𝗎𝗍𝗍𝗈𝗇𝗌', callback_data=f'setgs#max_btn#{settings["max_btn"]}#{grp_id}'), InlineKeyboardButton('10' if settings["max_btn"] else f'{MAX_B_TN}', callback_data=f'setgs#max_btn#{settings["max_btn"]}#{grp_id}')]
+                [
+                    InlineKeyboardButton('𝖥𝗂𝗅𝗍𝖾𝗋 𝖡𝗎𝗍𝗍𝗈𝗇',
+                                         callback_data=f'setgs#button#{settings["button"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('𝖲𝗂𝗇𝗀𝗅𝖾 𝖡𝗎𝗍𝗍𝗈𝗇' if settings["button"] else '𝖣𝗈𝗎𝖻𝗅𝖾',
+                                         callback_data=f'setgs#button#{settings["button"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖥𝗂𝗅𝖾 𝖲𝖾𝗇𝖽 𝖬𝗈𝖽𝖾', callback_data=f'setgs#botpm#{settings["botpm"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('𝖬𝖺𝗇𝗎𝖺𝗅 𝖲𝗍𝖺𝗋𝗍' if settings["botpm"] else '𝖠𝗎𝗍𝗈 𝖲𝖾𝗇𝖽',
+                                         callback_data=f'setgs#botpm#{settings["botpm"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖯𝗋𝗈𝗍𝖾𝖼𝗍 𝖢𝗈𝗇𝗍𝖾𝗇𝗍',
+                                         callback_data=f'setgs#file_secure#{settings["file_secure"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('✅ 𝖮𝗇' if settings["file_secure"] else '❌ 𝖮𝖿𝖿',
+                                         callback_data=f'setgs#file_secure#{settings["file_secure"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖨𝖬𝖣𝖻', callback_data=f'setgs#imdb#{settings["imdb"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('✅ 𝖮𝗇' if settings["imdb"] else '❌ 𝖮𝖿𝖿',
+                                         callback_data=f'setgs#imdb#{settings["imdb"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖲𝗉𝖾𝗅𝗅 𝖢𝗁𝖾𝖼𝗄',
+                                         callback_data=f'setgs#spell_check#{settings["spell_check"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('✅ 𝖮𝗇' if settings["spell_check"] else '❌ 𝖮𝖿𝖿',
+                                         callback_data=f'setgs#spell_check#{settings["spell_check"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖶𝖾𝗅𝖼𝗈𝗆𝖾 𝖬𝖾𝗌𝗌𝖺𝗀𝖾', callback_data=f'setgs#welcome#{settings["welcome"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('✅ 𝖮𝗇' if settings["welcome"] else '❌ 𝖮𝖿𝖿',
+                                         callback_data=f'setgs#welcome#{settings["welcome"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖠𝗎𝗍𝗈 𝖣𝖾𝗅𝖾𝗍𝖾',
+                                         callback_data=f'setgs#auto_delete#{settings["auto_delete"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('5 𝖬𝗂𝗇' if settings["auto_delete"] else '❌ 𝖮𝖿𝖿',
+                                         callback_data=f'setgs#auto_delete#{settings["auto_delete"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖠𝗎𝗍𝗈-𝖥𝗂𝗅𝗍𝖾𝗋',
+                                         callback_data=f'setgs#auto_ffilter#{settings["auto_ffilter"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('✅ 𝖮𝗇' if settings["auto_ffilter"] else '❌ 𝖮𝖿𝖿',
+                                         callback_data=f'setgs#auto_ffilter#{settings["auto_ffilter"]}#{str(grp_id)}')
+                ],
+                [
+                    InlineKeyboardButton('𝖬𝖺𝗑 𝖡𝗎𝗍𝗍𝗈𝗇𝗌',
+                                         callback_data=f'setgs#max_btn#{settings["max_btn"]}#{str(grp_id)}'),
+                    InlineKeyboardButton('10' if settings["max_btn"] else f'{MAX_B_TN}',
+                                         callback_data=f'setgs#max_btn#{settings["max_btn"]}#{str(grp_id)}')
+                ]
             ]
-            try:
-                await query.message.edit_reply_markup(InlineKeyboardMarkup(buttons))
-            except Exception:
-                # Some old messages may no longer be editable; setting is already saved.
-                pass
-        await query.answer("Setting updated.")
-
+            reply_markup = InlineKeyboardMarkup(buttons)
+            await query.message.edit_reply_markup(reply_markup)
     await query.answer('𝖯𝗂𝗋𝖺𝖼𝗒 𝗂𝗌 𝖢𝗋𝗂𝗆𝖾 !')
 
     
@@ -1437,51 +1463,68 @@ async def auto_filter(client, msg, spoll=False):
         await msg.message.delete()
 
 async def advantage_spell_chok(client, msg):
-    mv_id = msg.id
-    mv_rqst = msg.text
+    """Suggest likely movie titles when AutoFilter returns no file matches."""
+    mv_rqst = (msg.text or "").strip()
+    if not mv_rqst:
+        return
     reqstr1 = msg.from_user.id if msg.from_user else 0
-    reqstr = await client.get_users(reqstr1)
-    settings = await get_settings(msg.chat.id)
-    query = re.sub(
-        r"\b(pl(i|e)*?(s|z+|ease|se|ese|(e+)s(e)?)|((send|snd|giv(e)?|gib)(\sme)?)|movie(s)?|new|latest|br((o|u)h?)*|^h(e|a)?(l)*(o)*|mal(ayalam)?|t(h)?amil|file|that|find|und(o)*|kit(t(i|y)?)?o(w)?|thar(u)?(o)*w?|kittum(o)*|aya(k)*(um(o)*)?|full\smovie|any(one)|with\ssubtitle(s)?)",
-        "", msg.text, flags=re.IGNORECASE)  # plis contribute some common words
-    query = query.strip() + " movie"
     try:
-        movies = await get_poster(mv_rqst, bulk=True)
-    except Exception as e:
-        logger.exception(e)
-        reqst_gle = mv_rqst.replace(" ", "+")
-        button = [[
-                   InlineKeyboardButton("🔎 𝖦𝗈𝗈𝗀𝗅𝖾", url=f"https://www.google.com/search?q={reqst_gle}")
-        ]]
-        if NO_RESULTS_MSG:
-            await client.send_message(chat_id=LOG_CHANNEL, text=(script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst)))
-        k = await safe_reply_photo(msg, 
-            photo=SPELL_IMG, 
-            caption=script.I_CUDNT.format(mv_rqst),
-            reply_markup=InlineKeyboardMarkup(button)
-        )
-        await asyncio.sleep(30)
-        await k.delete()
-        return
-    movielist = []
+        reqstr = await client.get_users(reqstr1) if reqstr1 else None
+    except Exception:
+        reqstr = None
+    settings = await get_settings(msg.chat.id)
+
+    # Remove common conversational words, but retain the original query as fallback.
+    cleaned = re.sub(
+        r"\b(?:please|pls|plz|send|snd|give|movie|movies|new|latest|bruh|bro|malayalam|mal|tamil|telugu|hindi|english|file|that|find|full|with subtitles?)\b",
+        " ", mv_rqst, flags=re.IGNORECASE
+    )
+    cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,-")
+    candidates = []
+    for candidate in (cleaned, mv_rqst):
+        if candidate and candidate.lower() not in [x.lower() for x in candidates]:
+            candidates.append(candidate)
+
+    movies = []
+    last_error = None
+    for candidate in candidates:
+        try:
+            found = await get_poster(candidate, bulk=True)
+            if found:
+                movies = found
+                break
+        except Exception as exc:
+            last_error = exc
+            logger.warning("Spell-check lookup failed for %r: %s", candidate, exc)
+
     if not movies:
-        reqst_gle = mv_rqst.replace(" ", "+")
-        button = [[
-                   InlineKeyboardButton("🔎 𝖦𝗈𝗈𝗀𝗅𝖾", url=f"https://www.google.com/search?q={reqst_gle}")
-        ]]
-        if NO_RESULTS_MSG:
-            await client.send_message(chat_id=LOG_CHANNEL, text=(script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst)))
-        k = await safe_reply_photo(msg, 
-            photo=SPELL_IMG, 
-            caption=script.I_CUDNT.format(mv_rqst),
+        reqstr_gle = mv_rqst.replace(" ", "+")
+        button = [[InlineKeyboardButton("🔎 Google Search", url=f"https://www.google.com/search?q={reqstr_gle}")]]
+        if NO_RESULTS_MSG and reqstr:
+            try:
+                await client.send_message(chat_id=LOG_CHANNEL, text=script.NORSLTS.format(reqstr.id, reqstr.mention, mv_rqst))
+            except Exception:
+                logger.exception("Could not send no-results log")
+        await safe_reply_photo(
+            msg, photo=SPELL_IMG, caption=script.I_CUDNT.format(mv_rqst),
             reply_markup=InlineKeyboardMarkup(button)
         )
-        await asyncio.sleep(30)
-        await k.delete()
         return
-    movielist += [movie.get('title') for movie in movies]
-    movielist += [f"{movie.get('title')} {movie.get('year')}" for movie in movies]
+
+    # Deduplicate by title/year and offer both title and title+year where possible.
+    movielist = []
+    seen = set()
+    for movie in movies:
+        title = (movie.get("title") or "").strip()
+        year = movie.get("year")
+        if not title:
+            continue
+        for label in (title, f"{title} {year}" if year else None):
+            if label and label.casefold() not in seen:
+                seen.add(label.casefold())
+                movielist.append(label)
+    if not movielist:
+        return
     key=f"{msg.chat.id}-{msg.id}"
     temp.SPELL_CHECK[key] = movielist
     btn = [
