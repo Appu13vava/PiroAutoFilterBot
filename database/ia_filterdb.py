@@ -1,4 +1,5 @@
 import logging
+import asyncio
 from struct import pack
 import re
 import base64
@@ -159,19 +160,22 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     if file_type:
         filter['file_type'] = file_type
 
-    total_results = await Media.count_documents(filter)
-    next_offset = offset + max_results
-
-    if next_offset > total_results:
-        next_offset = ''
-
+    # Run the total-count query and page fetch concurrently. Both operations
+    # are still exact, but the user no longer waits for them one after another.
     cursor = Media.find(filter)
     # Sort by recent
     cursor.sort('$natural', -1)
     # Slice files according to offset and max results
     cursor.skip(offset).limit(max_results)
-    # Get list of files
-    files = await cursor.to_list(length=max_results)
+
+    total_results, files = await asyncio.gather(
+        Media.count_documents(filter),
+        cursor.to_list(length=max_results),
+    )
+
+    next_offset = offset + max_results
+    if next_offset > total_results:
+        next_offset = ''
     result = (files, next_offset, total_results)
     _set_cached_search(cache_key, result)
 
