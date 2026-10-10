@@ -1,17 +1,14 @@
-"""Track force-channel join requests without delivering a file early.
-
-A user must send a join request to each configured force channel. The next
-movie click then presents a request link for another channel. Once all
-configured channels have a saved request (or the user has joined), the normal
-/start handler delivers the requested movie.
-"""
 import logging
 from pyrogram import Client
-from info import AUTH_CHANNELS
+from pyrogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+from info import AUTH_CHANNELS, CUSTOM_FILE_CAPTION
 from database.users_chats_db import db
+from database.ia_filterdb import get_file_details
+from utils import get_size
+from search_link import send_search_results
 
 logger = logging.getLogger(__name__)
-logger.info("Force join-request tracker loaded")
+logger.info("Force join-request plugin loaded")
 
 
 @Client.on_chat_join_request()
@@ -19,29 +16,82 @@ async def save_join_request(client, request):
     user_id = int(request.from_user.id)
     channel_id = int(request.chat.id)
 
+    logger.info(
+        "JOIN REQUEST RECEIVED: user=%s channel=%s",
+        user_id,
+        channel_id
+    )
+
     try:
-        configured_channels = {int(ch) for ch in AUTH_CHANNELS}
-        if channel_id not in configured_channels:
+        if channel_id not in {int(ch) for ch in AUTH_CHANNELS}:
             return
 
-        # Store each request by user AND channel. Duplicate requests do not
-        # count as requests to other channels.
-        await db.add_force_request(user_id=user_id, channel_id=channel_id)
-        logger.info("Saved force join request: user=%s channel=%s", user_id, channel_id)
+        await db.add_force_request(
+            user_id=user_id,
+            channel_id=channel_id
+        )
 
-        # Do not send the pending movie here. The user should click the movie
-        # link again so the bot can select a different unrequested channel.
-        try:
-            await client.send_message(
-                chat_id=user_id,
-                text=(
-                    "✅ Join request received!\n\n"
-                    "ഇനി movie link വീണ്ടും click ചെയ്യൂ. അടുത്ത channel-ലേക്ക് "
-                    "request അയക്കാം. എല്ലാ 4 channel-ലേക്കും request അയച്ചാൽ "
-                    "movie നേരിട്ട് ലഭിക്കും."
-                ),
+        pending = await db.get_pending_force_file(user_id, channel_id)
+
+        if not pending:
+            logger.info(
+                "No pending file/search for user=%s channel=%s",
+                user_id,
+                channel_id
             )
-        except Exception:
-            logger.debug("Could not notify user %s after join request", user_id, exc_info=True)
+            return
+
+        if pending.get("search_query"):
+            await send_search_results(client, user_id, pending["search_query"])
+            await db.remove_pending_force_file(user_id, channel_id)
+            logger.info("Pending search results sent: user=%s query=%s", user_id, pending["search_query"])
+            return
+
+        file_id = pending.get("file_id")
+        if not file_id:
+            await db.remove_pending_force_file(user_id, channel_id)
+            return
+        details = await get_file_details(file_id)
+
+        if not details:
+            logger.warning("Pending file not found: %s", file_id)
+            await db.remove_pending_force_file(user_id, channel_id)
+            return
+
+        media = details[0]
+        size = get_size(media.file_size)
+        caption = media.caption or media.file_name or " "
+
+        if CUSTOM_FILE_CAPTION:
+            try:
+                caption = CUSTOM_FILE_CAPTION.format(
+                    file_name=media.file_name or "",
+                    file_size=size or "",
+                    file_caption=media.caption or ""
+                )
+            except Exception:
+                logger.exception("Could not format pending file caption")
+
+        await client.send_cached_media(
+            chat_id=user_id,
+            file_id=file_id,
+            caption=caption,
+            protect_content=bool(pending.get("protect", False)),
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(
+                    "⚔️ മലയാളം മൂവീസ് ⚔️",
+                    url="https://t.me/+lav5Yo5CPjZmNzY1"
+                )]
+            ])
+        )
+
+        await db.remove_pending_force_file(user_id, channel_id)
+
+        logger.info(
+            "Pending file sent automatically: user=%s channel=%s",
+            user_id,
+            channel_id
+        )
+
     except Exception:
-        logger.exception("Failed to record force join request for user=%s channel=%s", user_id, channel_id)
+        logger.exception("Failed to process force join request")
