@@ -77,7 +77,12 @@ async def give_filter(client, message):
         if total_results == 0:
             return
         else:
-            return await message.reply_text(f"<b>ðŸ‘‹ ð–§ð–¾ð—’ {message.from_user.mention} \nðŸ“ {str(total_results)} ð–±ð–¾ð—Œð—Žð—…ð—ð—Œ ð–ºð—‹ð–¾ ð–¿ð—ˆð—Žð—‡ð–½ ð–¿ð—ˆð—‹ ð—’ð—ˆð—Žð—‹ ð—Šð—Žð–¾ð—‹ð—’ {search}.\n\nKindly ask movies and series here â¬‡\n@filimifaktory & @filimifaktory</b>")
+            return await message.reply_text(
+                f"<b>👋 Hello {message.from_user.mention}!\n"
+                f"📁 {total_results} results found for: {search}\n\n"
+                "Kindly request movies and series here ⬇️\n"
+                "@filimifaktory</b>"
+            )
 
 @Client.on_message(filters.private & filters.text & filters.incoming)
 async def pv_filter(client, message):
