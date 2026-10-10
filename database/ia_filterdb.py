@@ -2,6 +2,8 @@ import logging
 from struct import pack
 import re
 import base64
+import time
+from collections import OrderedDict
 from pyrogram.file_id import FileId
 from pymongo.errors import DuplicateKeyError
 from umongo import Instance, Document, fields
@@ -12,6 +14,40 @@ from utils import get_settings, save_group_settings
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# Small in-process cache for repeated AutoFilter searches.
+# Results expire quickly and are invalidated whenever a new file is indexed.
+_SEARCH_CACHE_TTL = 20
+_SEARCH_CACHE_MAX = 512
+_search_cache = OrderedDict()
+
+
+def _clear_search_cache():
+    _search_cache.clear()
+
+
+def _get_cached_search(key):
+    item = _search_cache.get(key)
+    if item is None:
+        return None
+    expires_at, value = item
+    if expires_at <= time.monotonic():
+        _search_cache.pop(key, None)
+        return None
+    _search_cache.move_to_end(key)
+    return value
+
+
+def _set_cached_search(key, value):
+    now = time.monotonic()
+    # Remove expired entries while keeping this cache bounded.
+    for old_key, (expires_at, _) in list(_search_cache.items()):
+        if expires_at <= now:
+            _search_cache.pop(old_key, None)
+    _search_cache[key] = (now + _SEARCH_CACHE_TTL, value)
+    _search_cache.move_to_end(key)
+    while len(_search_cache) > _SEARCH_CACHE_MAX:
+        _search_cache.popitem(last=False)
 
 
 client = AsyncIOMotorClient(DATABASE_URI)
@@ -62,6 +98,7 @@ async def save_file(media):
 
             return False, 0
         else:
+            _clear_search_cache()
             logger.info(f'{getattr(media, "file_size", "NO_FILE")} is saved to database')
             return True, 1
 
@@ -84,6 +121,20 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
             else:
                 max_results = int(MAX_B_TN)
     query = query.strip()
+    cache_key = (
+        int(chat_id) if chat_id is not None else None,
+        query.casefold(),
+        file_type,
+        int(max_results),
+        int(offset),
+        bool(USE_CAPTION_FILTER),
+    )
+    cached_result = _get_cached_search(cache_key)
+    if cached_result is not None:
+        # Return a new list so callers cannot mutate the cached list itself.
+        cached_files, cached_offset, cached_total = cached_result
+        return list(cached_files), cached_offset, cached_total
+
     #if filter:
         #better ?
         #query = query.replace(' ', r'(\s|\.|\+|\-|_)')
@@ -121,8 +172,10 @@ async def get_search_results(chat_id, query, file_type=None, max_results=10, off
     cursor.skip(offset).limit(max_results)
     # Get list of files
     files = await cursor.to_list(length=max_results)
+    result = (files, next_offset, total_results)
+    _set_cached_search(cache_key, result)
 
-    return files, next_offset, total_results
+    return list(files), next_offset, total_results
 
 async def get_bad_files(query, file_type=None, filter=False):
     """For given query return (results, next_offset)"""
