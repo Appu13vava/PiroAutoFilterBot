@@ -45,12 +45,11 @@ class temp(object):
     SPELL_CHECK = {}
 
 async def get_missing_force_channels(bot, user_id):
-    """Return force channels neither joined nor having a saved pending join request."""
+    """Return only channels this user has neither joined nor requested to join."""
     missing = []
     for channel_id in AUTH_CHANNELS:
-        # A pending join request for THIS channel is sufficient; no admin approval needed.
         try:
-            if await db.has_force_request(user_id, channel_id):
+            if await db.has_force_request_for_channel(user_id, channel_id):
                 continue
         except Exception:
             logger.exception("Could not check saved join request for channel %s", channel_id)
@@ -63,13 +62,14 @@ async def get_missing_force_channels(bot, user_id):
             missing.append(channel_id)
         except Exception:
             logger.exception("Could not check membership for channel %s", channel_id)
-            # Fail closed if neither membership nor a saved request can be confirmed.
+            # Fail closed if membership/request state cannot be verified.
             missing.append(channel_id)
     return missing
 
 
 async def is_subscribed(bot, query):
-    # The bot releases files only after all configured force channels are joined.
+    # A user is cleared once they have joined or sent a join request to every
+    # configured force channel. Requests are tracked separately per channel.
     if not AUTH_CHANNELS:
         return True
     return not await get_missing_force_channels(bot, query.from_user.id)
