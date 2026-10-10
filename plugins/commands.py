@@ -84,8 +84,10 @@ async def start(client, message):
             # Rotate randomly among channels this user has not joined yet.
             missing_channels = await get_missing_force_channels(client, message.from_user.id)
             if not missing_channels:
-                missing_channels = AUTH_CHANNELS
-            channel_id = random.choice(AUTH_CHANNELS)
+                # All channels are already joined or have a recorded join request.
+                # Normally is_subscribed() handles this before reaching this block.
+                return
+            channel_id = random.choice(missing_channels)
             # Keep the exact randomly selected channel and requested file so the
             # join-request handler can deliver it automatically.
             pending_file_id = None
