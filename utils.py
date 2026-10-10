@@ -45,7 +45,12 @@ class temp(object):
     SPELL_CHECK = {}
 
 async def get_missing_force_channels(bot, user_id):
-    """Return only channels this user has neither joined nor requested to join."""
+    """Return configured channels the user has not joined and has not requested.
+
+    A join request is counted per channel. The user is prompted for only one
+    previously-unrequested channel per movie query; sending the request unlocks
+    that query's pending movie, while the next query selects from remaining channels.
+    """
     missing = []
     for channel_id in AUTH_CHANNELS:
         try:
@@ -62,14 +67,13 @@ async def get_missing_force_channels(bot, user_id):
             missing.append(channel_id)
         except Exception:
             logger.exception("Could not check membership for channel %s", channel_id)
-            # Fail closed if membership/request state cannot be verified.
+            # Do not accidentally unlock the bot when Telegram membership lookup fails.
             missing.append(channel_id)
     return missing
 
 
 async def is_subscribed(bot, query):
-    # A user is cleared once they have joined or sent a join request to every
-    # configured force channel. Requests are tracked separately per channel.
+    """True only after all configured channels are joined/requested."""
     if not AUTH_CHANNELS:
         return True
     return not await get_missing_force_channels(bot, query.from_user.id)
