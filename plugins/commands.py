@@ -78,14 +78,14 @@ async def start(client, message):
             parse_mode=enums.ParseMode.HTML
         )
         return
-    if AUTH_CHANNELS and not await is_subscribed(client, message):
+    missing_channels = []
+    if AUTH_CHANNELS:
+        missing_channels = await get_missing_force_channels(client, message.from_user.id)
+    if missing_channels:
         btn = []
         try:
-            # Rotate randomly among channels this user has not joined yet.
-            missing_channels = await get_missing_force_channels(client, message.from_user.id)
+            # Pick only from channels this user has neither joined nor requested.
             if not missing_channels:
-                # All channels are already joined or have a recorded join request.
-                # Normally is_subscribed() handles this before reaching this block.
                 return
             channel_id = random.choice(missing_channels)
             # Keep the exact randomly selected channel and requested file so the
