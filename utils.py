@@ -207,9 +207,15 @@ async def search_gagala(text):
 
 async def get_settings(group_id):
     settings = temp.SETTINGS.get(group_id)
-    if not settings:
+    if settings is None:
         settings = await db.get_settings(group_id)
-        temp.SETTINGS[group_id] = settings
+    # Older MongoDB settings documents may not contain keys added in later versions.
+    defaults = await db.get_settings(group_id)
+    if not isinstance(settings, dict):
+        settings = dict(defaults)
+    else:
+        settings = {**defaults, **settings}
+    temp.SETTINGS[group_id] = settings
     return settings
     
 async def save_group_settings(group_id, key, value):
