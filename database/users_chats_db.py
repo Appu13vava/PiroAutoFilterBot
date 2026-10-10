@@ -98,10 +98,12 @@ class Database:
             "channel_id": int(channel_id)
         })
 
-    async def remove_pending_force_file(self, user_id):
-        await self.pending_force_files.delete_many({
-            "user_id": int(user_id)
-        })
+    async def remove_pending_force_file(self, user_id, channel_id=None):
+        """Remove the pending item for this user, optionally for one channel only."""
+        query = {"user_id": int(user_id)}
+        if channel_id is not None:
+            query["channel_id"] = int(channel_id)
+        await self.pending_force_files.delete_many(query)
 
     # ---------------- USERS ----------------
 
