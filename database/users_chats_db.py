@@ -202,9 +202,20 @@ class Database:
         )
 
     async def update_settings(self, id, settings):
+        # Persist settings even if this group has not yet been inserted into
+        # the groups collection (upsert prevents silent loss of the toggle).
+        group_id = int(id)
         await self.grp.update_one(
-            {"id": int(id)},
-            {"$set": {"settings": settings}}
+            {"id": group_id},
+            {
+                "$set": {"settings": settings},
+                "$setOnInsert": {
+                    "id": group_id,
+                    "title": "Unknown",
+                    "chat_status": {"is_disabled": False, "reason": ""}
+                }
+            },
+            upsert=True
         )
 
     async def get_settings(self, id):
@@ -221,9 +232,12 @@ class Database:
             "template": IMDB_TEMPLATE
         }
         chat = await self.grp.find_one({"id": int(id)})
-        if chat:
-            return chat.get("settings", default)
-        return default
+        # Merge defaults with saved values so older/incomplete MongoDB
+        # documents still receive the current spell_check default.
+        saved = chat.get("settings", {}) if chat else {}
+        if not isinstance(saved, dict):
+            saved = {}
+        return {**default, **saved}
 
     async def disable_chat(self, chat, reason="No Reason"):
         chat_status = dict(
