@@ -206,10 +206,10 @@ async def search_gagala(text):
 
 
 async def get_settings(group_id):
+    # Telegram chat IDs may arrive as strings from callback_data and as ints
+    # from messages. Normalize the cache key to avoid two stale copies.
+    group_id = int(group_id)
     settings = temp.SETTINGS.get(group_id)
-    if settings is None:
-        settings = await db.get_settings(group_id)
-    # Older MongoDB settings documents may not contain keys added in later versions.
     defaults = await db.get_settings(group_id)
     if not isinstance(settings, dict):
         settings = dict(defaults)
@@ -217,12 +217,17 @@ async def get_settings(group_id):
         settings = {**defaults, **settings}
     temp.SETTINGS[group_id] = settings
     return settings
-    
+
 async def save_group_settings(group_id, key, value):
+    group_id = int(group_id)
     current = await get_settings(group_id)
     current[key] = value
     temp.SETTINGS[group_id] = current
     await db.update_settings(group_id, current)
+    # Re-read from MongoDB so the in-memory state reflects what was saved.
+    saved = await db.get_settings(group_id)
+    temp.SETTINGS[group_id] = saved
+    return saved
     
 def get_size(size):
     """Get size in readable format"""
