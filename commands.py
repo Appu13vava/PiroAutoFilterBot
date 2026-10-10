@@ -77,13 +77,15 @@ async def start(client, message):
             parse_mode=enums.ParseMode.HTML
         )
         return
-    if AUTH_CHANNELS and not await is_subscribed(client, message):
+    missing_channels = []
+    if AUTH_CHANNELS:
+        missing_channels = await get_missing_force_channels(client, message.from_user.id)
+    if missing_channels:
         btn = []
         try:
-            # Rotate randomly among channels this user has not joined yet.
-            missing_channels = await get_missing_force_channels(client, message.from_user.id)
+            # Pick only from channels this user has neither joined nor requested.
             if not missing_channels:
-                missing_channels = AUTH_CHANNELS
+                return
             channel_id = random.choice(missing_channels)
             invite_link = await client.create_chat_invite_link(
                 channel_id,
