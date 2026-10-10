@@ -79,9 +79,9 @@ async def give_filter(client, message):
         else:
             return await message.reply_text(
                 f"<b>👋 Hello {message.from_user.mention}!\n"
-                f"📁 {total_results} results found for: {search}\n\n"
-                "Kindly request movies and series here ⬇️\n"
-                "@filimifaktory</b>"
+                f"📁 {total_results} files found for your search: {search}.\n\n"
+                "👇 Kindly request movies and series here\n"
+                "@filimifaktory & @filimifaktory</b>"
             )
 
 @Client.on_message(filters.private & filters.text & filters.incoming)
@@ -1373,7 +1373,7 @@ async def auto_filter(client, msg, spoll=False):
                 )
     else:
         btn.append(
-            [InlineKeyboardButton(text="âŒ ð–­ð—ˆ ð–¬ð—ˆð—‹ð–¾ ð–¯ð–ºð—€ð–¾ð—Œ ð– ð—ð–ºð—‚ð—…ð–ºð–»ð—…ð–¾ ! âŒ",callback_data="pages")]
+            [InlineKeyboardButton(text="❌ NO MORE PAGES AVAILABLE! ❌",callback_data="pages")]
         )
     imdb = await get_poster(search, file=(files[0]).file_name) if settings["imdb"] else None
     TEMPLATE = settings['template']
