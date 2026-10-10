@@ -1410,7 +1410,7 @@ async def auto_filter(client, msg, spoll=False):
             **locals()
         )
     else:
-        cap = f"<b>ðŸ‘‹ ð–§ð–¾ð—’ {message.from_user.mention}\nðŸ“ ð–¸ð—ˆð—Žð—‹ ð–¥ð—‚ð—…ð–¾ð—Œ ð– ð—‹ð–¾ ð–±ð–¾ð–ºð–½ð—’\n\nâ™¨ï¸ ð–¯ð—ˆð—ð–¾ð—‹ð–¾ð–½ ð–¡ð—’ @filimifaktory</b>"
+        cap = f"<b>👋 Hello {message.from_user.mention}\n📁 Your files are ready.\n\n✨ Powered by @filimifaktory</b>"
     if imdb and imdb.get('poster'):
         try:
             hehe = await safe_reply_photo(message, photo=imdb.get('poster'), caption=cap[:1024], reply_markup=InlineKeyboardMarkup(btn))
