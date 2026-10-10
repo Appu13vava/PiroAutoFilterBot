@@ -47,6 +47,8 @@ class Database:
         return await self.force_requests.find_one(query) is not None
 
     async def has_force_request_for_channel(self, user_id, channel_id):
+        # Telegram channel IDs may be configured as strings in info.py.
+        # Normalize both IDs so requests are tracked per user AND per channel.
         return await self.force_requests.find_one({
             "user_id": int(user_id),
             "channel_id": int(channel_id)
