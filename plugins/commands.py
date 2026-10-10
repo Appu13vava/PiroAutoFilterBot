@@ -78,49 +78,66 @@ async def start(client, message):
             parse_mode=enums.ParseMode.HTML
         )
         return
-    missing_channels = []
+    # Force join flow: pick one random configured channel for each movie query.
+    # If the user already joined/requested that channel, continue to the file.
     if AUTH_CHANNELS:
-        missing_channels = await get_missing_force_channels(client, message.from_user.id)
-    if missing_channels:
-        btn = []
         try:
-            # Pick only from channels this user has neither joined nor requested.
-            if not missing_channels:
-                return
-            channel_id = random.choice(missing_channels)
-            # Keep the exact randomly selected channel and requested file so the
-            # join-request handler can deliver it automatically.
-            pending_file_id = None
-            pending_protect = False
-            try:
-                kk, payload = message.command[1].split("_", 1)
-                if kk == "search":
-                    await db.save_pending_force_search(
-                        message.from_user.id, channel_id, payload
-                    )
-                else:
-                    pending_file_id = payload
-                    pending_protect = kk == "filep"
-                    await db.save_pending_force_file(
-                        message.from_user.id, channel_id, pending_file_id, pending_protect
-                    )
-            except (IndexError, ValueError):
-                pass
-            invite_link = await client.create_chat_invite_link(
-                channel_id,
-                creates_join_request=True
-            )
-            try:
-                chat = await client.get_chat(channel_id)
-                channel_title = chat.title or "Force Channel"
-            except Exception:
-                channel_title = "Force Channel"
-            btn.append([
-                InlineKeyboardButton(
-                    f"📨 Request to Join {channel_title}",
-                    url=invite_link.invite_link
+            request_count = 0
+            for force_channel in AUTH_CHANNELS:
+                if await db.has_force_request_for_channel(message.from_user.id, force_channel):
+                    request_count += 1
+
+            # Once requests have been sent to every configured channel, skip prompts.
+            if request_count < len(AUTH_CHANNELS):
+                channel_id = random.choice(list(AUTH_CHANNELS))
+                already_requested = await db.has_force_request_for_channel(
+                    message.from_user.id, channel_id
                 )
-            ])
+                already_joined = False
+                try:
+                    member = await client.get_chat_member(channel_id, message.from_user.id)
+                    already_joined = member.status not in (
+                        enums.ChatMemberStatus.LEFT,
+                        enums.ChatMemberStatus.BANNED,
+                    )
+                except Exception:
+                    already_joined = False
+
+                if not already_requested and not already_joined:
+                    try:
+                        kk, payload = message.command[1].split("_", 1)
+                        if kk == "search":
+                            await db.save_pending_force_search(
+                                message.from_user.id, channel_id, payload
+                            )
+                        else:
+                            await db.save_pending_force_file(
+                                message.from_user.id, channel_id, payload, kk == "filep"
+                            )
+                    except (IndexError, ValueError):
+                        pass
+
+                    invite_link = await client.create_chat_invite_link(
+                        channel_id, creates_join_request=True
+                    )
+                    try:
+                        chat = await client.get_chat(channel_id)
+                        channel_title = chat.title or "Force Channel"
+                    except Exception:
+                        channel_title = "Force Channel"
+
+                    await client.send_message(
+                        chat_id=message.from_user.id,
+                        text="**Please send a Join Request to continue. After your request, the movie will be sent automatically.**",
+                        reply_markup=InlineKeyboardMarkup([[
+                            InlineKeyboardButton(
+                                f"📨 Request to Join {channel_title}",
+                                url=invite_link.invite_link
+                            )
+                        ]]),
+                        parse_mode=enums.ParseMode.MARKDOWN
+                    )
+                    return
         except ChatAdminRequired:
             logger.error("Make sure Bot is admin in force-sub channels and can invite users.")
             await client.send_message(
@@ -128,15 +145,9 @@ async def start(client, message):
                 text="Bot needs admin permission and invite-link rights in the force channel."
             )
             return
+        except Exception:
+            logger.exception("Force join selection failed; continuing normal file delivery.")
 
-        # No Try Again button: a matching join request triggers automatic delivery.
-        await client.send_message(
-            chat_id=message.from_user.id,
-            text="**Please Join My Updates Channel to use this Bot!**",
-            reply_markup=InlineKeyboardMarkup(btn),
-            parse_mode=enums.ParseMode.MARKDOWN
-            )
-        return
     if len(message.command) == 2 and message.command[1] in ["subscribe", "error", "okay", "help"]:
         buttons = [[
                     InlineKeyboardButton('➕ 𝖠𝖽𝖽 𝖬𝖾 𝖳𝗈 𝖸𝗈𝗎𝗋 𝖦𝗋𝗈𝗎𝗉 ➕', url=f"http://t.me/{temp.U_NAME}?startgroup=true")
