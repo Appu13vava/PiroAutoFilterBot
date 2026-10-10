@@ -39,10 +39,12 @@ class Database:
             upsert=True
         )
 
-    async def has_force_request(self, user_id):
-        return await self.force_requests.find_one(
-            {"user_id": int(user_id)}
-        ) is not None
+    async def has_force_request(self, user_id, channel_id=None):
+        """Check whether a user has a saved request, optionally for one channel."""
+        query = {"user_id": int(user_id)}
+        if channel_id is not None:
+            query["channel_id"] = int(channel_id)
+        return await self.force_requests.find_one(query) is not None
 
     async def has_force_request_for_channel(self, user_id, channel_id):
         return await self.force_requests.find_one({
