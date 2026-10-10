@@ -676,7 +676,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
             reply_markup = InlineKeyboardMarkup(buttons)
             await query.message.edit_text(
                 text=f"<b>𝖢𝗁𝖺𝗇𝗀𝖾 𝖸𝗈𝗎𝗋 𝖲𝖾𝗍𝗍𝗂𝗇𝗀𝗌 𝖥𝗈𝗋 {title} 𝖠𝗌 𝖸𝗈𝗎𝗋 𝖶𝗂𝗌𝗁</b>",
-                disable_web_page_preview=True,
                 parse_mode=enums.ParseMode.HTML
             )
             await query.message.edit_reply_markup(reply_markup)
@@ -759,7 +758,6 @@ async def cb_handler(client: Client, query: CallbackQuery):
                 chat_id=userid,
                 text=f"<b>𝖢𝗁𝖺𝗇𝗀𝖾 𝖸𝗈𝗎𝗋 𝖲𝖾𝗍𝗍𝗂𝗇𝗀𝗌 𝖥𝗈𝗋 {title} 𝖠𝗌 𝖸𝗈𝗎𝗋 𝖶𝗂𝗌𝗁</b>",
                 reply_markup=reply_markup,
-                disable_web_page_preview=True,
                 parse_mode=enums.ParseMode.HTML,
                 reply_to_message_id=query.message.id
             )
@@ -1576,8 +1574,7 @@ async def manual_filters(client, message, text=False):
                             piroxrk = await client.send_message(
                                 group_id, 
                                 reply_text, 
-                                disable_web_page_preview=True,
-                                protect_content=True if settings["file_secure"] else False,
+                                                protect_content=True if settings["file_secure"] else False,
                                 reply_to_message_id=reply_id
                             )
                             try:
@@ -1616,8 +1613,7 @@ async def manual_filters(client, message, text=False):
                             piroxrk = await client.send_message(
                                 group_id,
                                 reply_text,
-                                disable_web_page_preview=True,
-                                reply_markup=InlineKeyboardMarkup(button),
+                                                reply_markup=InlineKeyboardMarkup(button),
                                 protect_content=True if settings["file_secure"] else False,
                                 reply_to_message_id=reply_id
                             )
@@ -1757,8 +1753,7 @@ async def global_filters(client, message, text=False):
                             piroxrk = await client.send_message(
                                 group_id, 
                                 reply_text, 
-                                disable_web_page_preview=True,
-                                reply_to_message_id=reply_id
+                                                reply_to_message_id=reply_id
                             )
                             manual = await manual_filters(client, message)
                             if manual == False:
@@ -1809,8 +1804,7 @@ async def global_filters(client, message, text=False):
                             piroxrk = await client.send_message(
                                 group_id,
                                 reply_text,
-                                disable_web_page_preview=True,
-                                reply_markup=InlineKeyboardMarkup(button),
+                                                reply_markup=InlineKeyboardMarkup(button),
                                 reply_to_message_id=reply_id
                             )
                             manual = await manual_filters(client, message)
